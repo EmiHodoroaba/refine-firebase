@@ -1,154 +1,229 @@
 import { FirebaseApp } from "@firebase/app";
-import { AuthProvider } from "@pankod/refine-core";
-import { Auth, inMemoryPersistence, browserLocalPersistence, browserSessionPersistence, createUserWithEmailAndPassword, getAuth, getIdTokenResult, ParsedToken, RecaptchaParameters, RecaptchaVerifier, sendEmailVerification, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, updateEmail, updatePassword, updateProfile, User as FirebaseUser } from "firebase/auth";
+import { AuthProvider } from "@refinedev/core";
+import {
+  Auth,
+  inMemoryPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  getAuth,
+  getIdTokenResult,
+  ParsedToken,
+  RecaptchaParameters,
+  RecaptchaVerifier,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updateEmail,
+  updatePassword,
+  updateProfile,
+  User as FirebaseUser,
+} from "firebase/auth";
 import { IAuthCallbacks, ILoginArgs, IRegisterArgs, IUser } from "./interfaces";
 import { detectPlatform } from "./helpers/detectPlatform";
 
 export class FirebaseAuth {
-    auth: Auth;
+  auth: Auth;
 
-    constructor (
-        private readonly authActions?: IAuthCallbacks,
-        firebaseApp?: FirebaseApp,
-        auth?: Auth
-    ) {
-        this.auth = auth || getAuth(firebaseApp);
-        this.auth.useDeviceLanguage();
+  constructor(
+    private readonly authActions?: IAuthCallbacks,
+    firebaseApp?: FirebaseApp,
+    auth?: Auth
+  ) {
+    this.auth = auth || getAuth(firebaseApp);
+    this.auth.useDeviceLanguage();
 
-        this.getAuthProvider = this.getAuthProvider.bind(this);
-        this.handleLogIn = this.handleLogIn.bind(this);
-        this.handleRegister = this.handleRegister.bind(this);
-        this.handleLogOut = this.handleLogOut.bind(this);
-        this.handleResetPassword = this.handleResetPassword.bind(this);
-        this.onUpdateUserData = this.onUpdateUserData.bind(this);
-        this.getUserIdentity = this.getUserIdentity.bind(this);
-        this.handleCheckAuth = this.handleCheckAuth.bind(this);
-        this.createRecaptcha = this.createRecaptcha.bind(this);
-        this.getPermissions = this.getPermissions.bind(this);
-    }
+    this.getAuthProvider = this.getAuthProvider.bind(this);
+    this.handleLogIn = this.handleLogIn.bind(this);
+    this.handleRegister = this.handleRegister.bind(this);
+    this.handleLogOut = this.handleLogOut.bind(this);
+    this.handleResetPassword = this.handleResetPassword.bind(this);
+    this.onUpdateUserData = this.onUpdateUserData.bind(this);
+    this.getIdentity = this.getIdentity.bind(this);
+    this.handleCheckAuth = this.handleCheckAuth.bind(this);
+    this.createRecaptcha = this.createRecaptcha.bind(this);
+    this.getPermissions = this.getPermissions.bind(this);
+  }
 
-    public async handleLogOut() {
-        await signOut(this.auth);
-        await this.authActions?.onLogout?.(this.auth);
-    }
+  public async handleLogOut() {
+    await signOut(this.auth);
+    await this.authActions?.onLogout?.(this.auth);
+    return { success: true, redirectTo: "/login" };
+  }
 
-    public async handleRegister(args: IRegisterArgs) {
-        try {
-            const { email, password, displayName } = args;
+  public async handleRegister(args: IRegisterArgs) {
+    try {
+      const { email, password, displayName } = args;
 
-            const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
-            await sendEmailVerification(userCredential.user);
-            if (userCredential.user) {
-                if (displayName) {
-                    await updateProfile(userCredential.user, { displayName });
-                }
-                this.authActions?.onRegister?.(userCredential.user);
-            }
-
-        } catch (error) {
-            return Promise.reject(error);
+      const userCredential = await createUserWithEmailAndPassword(
+        this.auth,
+        email,
+        password
+      );
+      await sendEmailVerification(userCredential.user);
+      if (userCredential.user) {
+        if (displayName) {
+          await updateProfile(userCredential.user, { displayName });
         }
-    }
-
-    public async handleLogIn({ email, password, remember }: ILoginArgs) {
-        try {
-            if (this.auth) {
-                let persistance = browserSessionPersistence;
-                if (detectPlatform() === "react-native") {
-                    persistance = inMemoryPersistence;
-                } else if (remember) {
-                    persistance = browserLocalPersistence;
-                }
-                await this.auth.setPersistence(persistance);
-
-                const userCredential = await signInWithEmailAndPassword(this.auth, email, password);
-                const userToken = await userCredential?.user?.getIdToken?.();
-                if (userToken) {
-                    this.authActions?.onLogin?.(userCredential.user);
-                } else {
-                    return Promise.reject(new Error("User is not found"));
-                }
-            } else {
-                return Promise.reject(new Error("User is not found"));
-            }
-        } catch (error) {
-            return Promise.reject(error);
-        }
-    }
-
-    public handleResetPassword(email: string) {
-        return sendPasswordResetEmail(this.auth, email);
-    }
-
-    public async onUpdateUserData(args: IRegisterArgs) {
-
-        try {
-            if (this.auth?.currentUser) {
-                const { displayName, email, password } = args;
-                if (password) {
-                    await updatePassword(this.auth.currentUser, password);
-                }
-
-                if (email && this.auth.currentUser.email !== email) {
-                    await updateEmail(this.auth.currentUser, email);
-                }
-
-                if (displayName && this.auth.currentUser.displayName !== displayName) {
-                    await updateProfile(this.auth.currentUser, { displayName: displayName });
-                }
-            }
-        } catch (error) {
-            return Promise.reject(error);
-        }
-    }
-
-    private async getUserIdentity(): Promise<IUser> {
-        const user = this.auth?.currentUser;
+        this.authActions?.onRegister?.(userCredential.user);
+        return { success: true, redirectTo: "/login" };
+      }
+    } catch (error) {
         return {
-            ...this.auth.currentUser,
-            email: user?.email || "",
-            name: user?.displayName || ""
-        };
+            success: false,
+            error: {
+              message: "Register Error",
+              name: "Something went wrong",
+            },
+          };
     }
+  }
 
-    private getFirebaseUser(): Promise<FirebaseUser> {
-        return new Promise<FirebaseUser>((resolve, reject) => {
-            const unsubscribe = this.auth?.onAuthStateChanged(user => {
-                unsubscribe();
-                resolve(user as FirebaseUser | PromiseLike<FirebaseUser>);
-            }, reject);
-        });
-    }
-
-    private async handleCheckAuth() {
-        if (await this.getFirebaseUser()) {
-            return Promise.resolve();
-        } else {
-            return Promise.reject(new Error("User is not found"));
+  public async handleLogIn({ email, password, remember }: ILoginArgs) {
+    try {
+      if (this.auth) {
+        let persistance = browserSessionPersistence;
+        if (detectPlatform() === "react-native") {
+          persistance = inMemoryPersistence;
+        } else if (remember) {
+          persistance = browserLocalPersistence;
         }
-    }
+        await this.auth.setPersistence(persistance);
 
-    public async getPermissions(): Promise<ParsedToken> {
-        if (this.auth?.currentUser) {
-            const idTokenResult = await getIdTokenResult(this.auth.currentUser);
-            return idTokenResult?.claims;
+        const userCredential = await signInWithEmailAndPassword(
+          this.auth,
+          email,
+          password
+        );
+        const userToken = await userCredential?.user?.getIdToken?.();
+        if (userToken) {
+          this.authActions?.onLogin?.(userCredential.user);
+          return { success: true };
         } else {
-            return Promise.reject(new Error("User is not found"));
+          return {
+            success: false,
+            error: {
+              message: "Login Error",
+              name: "User is not found",
+            },
+          };
         }
-    }
-
-    public createRecaptcha(containerOrId: string | HTMLDivElement, parameters?: RecaptchaParameters) {
-        return new RecaptchaVerifier(containerOrId, parameters, this.auth);
-    }
-
-    public getAuthProvider(): AuthProvider {
+      } else {
         return {
-            login: this.handleLogIn,
-            logout: this.handleLogOut,
-            checkAuth: this.handleCheckAuth,
-            checkError: () => Promise.resolve(),
-            getPermissions: this.getPermissions,
-            getUserIdentity: this.getUserIdentity,
+          success: false,
+          error: {
+            message: "Login Error",
+            name: "User is not found",
+          },
         };
+      }
+    } catch (error) {
+      return Promise.reject(error);
     }
+  }
+
+  public async handleResetPassword(email: any) {
+    console.log(email)
+    await sendPasswordResetEmail(this.auth, email.email);
+    return { success: true, redirectTo: "/login" };
+  }
+
+  public async onUpdateUserData(args: IRegisterArgs) {
+    try {
+      if (this.auth?.currentUser) {
+        const { displayName, email, password } = args;
+        if (password) {
+          await updatePassword(this.auth.currentUser, password);
+        }
+
+        if (email && this.auth.currentUser.email !== email) {
+          await updateEmail(this.auth.currentUser, email);
+        }
+
+        if (displayName && this.auth.currentUser.displayName !== displayName) {
+          await updateProfile(this.auth.currentUser, {
+            displayName: displayName,
+          });
+        }
+        return { success: true };
+      }
+    } catch (error) {
+      return { success: false, error: error };
+    }
+  }
+
+  private async getIdentity(): Promise<IUser> {
+    const user = this.auth?.currentUser;
+    return {
+      ...this.auth.currentUser,
+      email: user?.email || "",
+      name: user?.displayName || "",
+    };
+  }
+
+  private getFirebaseUser(): Promise<FirebaseUser> {
+    return new Promise<FirebaseUser>((resolve, reject) => {
+      const unsubscribe = this.auth?.onAuthStateChanged((user) => {
+        unsubscribe();
+        resolve(user as FirebaseUser | PromiseLike<FirebaseUser>);
+      }, reject);
+    });
+  }
+
+  private async handleCheckAuth() {
+    if (await this.getFirebaseUser()) {
+      return { authenticated: true };
+    } else {
+        return {
+            authenticated: false,
+            redirectTo: "/login",
+            logout: true,
+            error: {
+              message: "Auth Error",
+              name: "User is not authenticated",
+            },
+          };
+    }
+  }
+  private async handleError(error) {
+    if (error.status === 401 || error.status === 403) {
+           return {
+               redirectTo: "/login",
+               logout: true,
+               error: error,
+           };
+    }
+    return {};
+  }
+
+  public async getPermissions(): Promise<ParsedToken> {
+    if (this.auth?.currentUser) {
+      const idTokenResult = await getIdTokenResult(this.auth.currentUser);
+      return idTokenResult?.claims;
+    } else {
+      return null;
+    }
+  }
+
+  public createRecaptcha(
+    containerOrId: string | HTMLDivElement,
+    parameters?: RecaptchaParameters
+  ) {
+    return new RecaptchaVerifier(containerOrId, parameters, this.auth);
+  }
+
+  public getAuthProvider(): AuthProvider {
+    return {
+      forgotPassword: this.handleResetPassword,
+      updatePassword: this.onUpdateUserData,
+      register: this.handleRegister,
+      login: this.handleLogIn,
+      logout: this.handleLogOut,
+      check: this.handleCheckAuth,
+      onError: this.handleError,
+      getPermissions: this.getPermissions,
+      getIdentity: this.getIdentity,
+    };
+  }
 }
