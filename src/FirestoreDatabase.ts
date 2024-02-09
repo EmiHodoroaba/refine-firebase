@@ -1,7 +1,6 @@
-import { Firestore, getDocs, getFirestore, collection, addDoc, doc, getDoc, updateDoc, deleteDoc, where, query, CollectionReference, DocumentData, Query, orderBy } from "firebase/firestore";
+import { Firestore, getAggregateFromServer, getCountFromServer, getDocs, getFirestore, collection, addDoc, doc, getDoc, updateDoc, deleteDoc, where, query, CollectionReference, DocumentData, Query, orderBy } from "firebase/firestore";
 import { ICreateData, IDeleteData, IDeleteManyData, IGetList, IGetMany, IGetOne, IDatabaseOptions, IUpdateData, IUpdateManyData, CrudOperators } from "./interfaces";
 import { BaseDatabase } from "./Database";
-
 
 export class FirestoreDatabase extends BaseDatabase {
     database: Firestore;
@@ -22,7 +21,12 @@ export class FirestoreDatabase extends BaseDatabase {
     getDocRef(resource: string, id: string) {
         return doc(this.database, resource, id);
     }
-
+    getAggregateFromServer(query, aggregation){
+        return getAggregateFromServer(query, aggregation);
+    }
+    getCountFromServer(query){
+        return getCountFromServer(query);
+    }
     getFilterQuery({ resource, sort, filters }: IGetList): (CollectionReference<DocumentData> | Query<DocumentData>) {
         const ref = this.getCollectionRef(resource);
         let queryFilter = filters?.map(filter => {
@@ -90,7 +94,9 @@ export class FirestoreDatabase extends BaseDatabase {
             Promise.reject(error);
         }
     }
-
+    async getDocs(refrence: CollectionReference<DocumentData>){
+        return getDocs(refrence);
+    }
     async getList(args: IGetList): Promise<any> {
         try {
             const ref = this.getFilterQuery(args);
