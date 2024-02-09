@@ -210,6 +210,7 @@ export class FirebaseAuth {
     parameters?: RecaptchaParameters
   ) {
     return new RecaptchaVerifier(this.auth, containerOrId, parameters);
+
   }
 
   public getAuthProvider(): AuthProvider {
