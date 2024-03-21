@@ -94,7 +94,7 @@ export class FirestoreDatabase extends BaseDatabase {
             Promise.reject(error);
         }
     }
-    async getDocs(refrence: CollectionReference<DocumentData>){
+    async getDocs(refrence: Query<DocumentData>){
         return getDocs(refrence);
     }
     async getList(args: IGetList): Promise<any> {
